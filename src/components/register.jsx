@@ -25,7 +25,7 @@ const Register = () => {
 
     const fetchStacks = async () => {
       try {
-        const res = await fetch("http://localhost:1203/tickets/all_stacks")
+        const res = await fetch(`${process.env.REACT_APP_URL}/all_stacks`)
         const data = await res.json()
         setStacksList(data)
       } catch (err) {
@@ -50,7 +50,7 @@ const Register = () => {
     }
 
     try {
-      const response = await fetch("http://localhost:1203/tickets/login", {
+      const response = await fetch(`${process.env.REACT_APP_URL}/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
