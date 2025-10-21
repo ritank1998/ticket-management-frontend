@@ -44,7 +44,13 @@ const Login = () => {
             ? "Admin login successful!"
             : "Login successful!"
         );
-        window.location.replace("/home");
+        if(activeTab === "admin")
+        {
+ window.location.replace("/admin-portal");
+        }else{
+           window.location.replace("/home");
+        }
+       
       } else {
         const err = await response.json();
         alert(err.error || "Invalid email or password.");
