@@ -1,47 +1,102 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Portal from "./portal";
 
 const TicketModal = ({ ticket, onClose }) => {
-  // ✅ Hooks must be at the top
-  const [comments, setComments] = useState(ticket?.comments || []);
+  const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
 
-  // Add new comment
-  const handleAddComment = () => {
-    if (!newComment.trim()) return;
+  // Get user from sessionStorage
+  const user = JSON.parse(sessionStorage.getItem("user"));
 
-    const comment = {
-      id: Date.now(),
-      user: "You", // Replace with logged-in user
-      message: newComment,
-      replies: [],
+  // Fetch all comments when modal opens
+  useEffect(() => {
+    if (!ticket?.ticket_id) return;
+
+    const fetchComments = async () => {
+      try {
+        const res = await fetch(
+          `${process.env.REACT_APP_URL}/all-comment?ticket_id=${ticket.ticket_id}`
+        );
+        const data = await res.json();
+
+        // Normalize data to always be an array
+        if (Array.isArray(data)) {
+          setComments(data);
+        } else if (data.comment) {
+          setComments([data.comment]);
+        } else {
+          setComments([]);
+        }
+      } catch (error) {
+        console.error("Error fetching comments:", error);
+        setComments([]);
+      }
     };
 
-    setComments([comment, ...comments]);
-    setNewComment("");
+    fetchComments();
+  }, [ticket]);
+
+  // Add new comment (POST)
+  const handleAddComment = async () => {
+    if (!newComment.trim()) return;
+    if (!ticket?.ticket_id || !user?.user_id) return;
+
+    try {
+      const res = await fetch(`${process.env.REACT_APP_URL}/comment`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticket_id: ticket.ticket_id,
+          user_id: user.user_id,
+          comment_text: newComment,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        // Backend returns { comment: {...} }, normalize to array
+        setComments((prev) => [data.comment, ...prev]);
+        setNewComment("");
+      } else {
+        console.error("Failed to add comment:", data);
+      }
+    } catch (error) {
+      console.error("Error adding comment:", error);
+    }
   };
 
-  // Add reply to a comment
+  // Add reply locally (not persisted yet)
   const handleAddReply = (commentId, replyMessage) => {
     if (!replyMessage.trim()) return;
-
     setComments((prev) =>
       prev.map((c) => {
-        if (c.id === commentId) {
-          const reply = { id: Date.now(), user: "You", message: replyMessage };
-          return { ...c, replies: [...c.replies, reply] };
+        if (c.comment_id === commentId || c.id === commentId) {
+          const reply = {
+            id: Date.now(),
+            user_id: user?.user_id,
+            user_email: user?.email,
+            message: replyMessage,
+          };
+          return { ...c, replies: [...(c.replies || []), reply] };
         }
         return c;
       })
     );
   };
 
-  if (!ticket) return null; // Conditional render after hooks
+  if (!ticket) return null;
 
   return (
     <Portal>
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 overflow-auto p-4">
-        <div className="bg-white rounded-2xl shadow-lg max-w-lg w-full p-6 relative">
+      <div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 overflow-auto p-4"
+        onClick={onClose}
+      >
+        <div
+          className="bg-white rounded-2xl shadow-lg max-w-lg w-full p-6 relative"
+          onClick={(e) => e.stopPropagation()}
+        >
           {/* Close Button */}
           <button
             onClick={onClose}
@@ -57,14 +112,14 @@ const TicketModal = ({ ticket, onClose }) => {
               <h6 className="text-gray-400 uppercase text-xs mb-1">Project</h6>
               <p>{ticket.project_name || "Not Assigned"}</p>
             </div>
-
             <div>
               <h6 className="text-gray-400 uppercase text-xs mb-1">Status</h6>
               <p>{ticket.status}</p>
             </div>
-
             <div>
-              <h6 className="text-gray-400 uppercase text-xs mb-1">Description</h6>
+              <h6 className="text-gray-400 uppercase text-xs mb-1">
+                Description
+              </h6>
               <p>{ticket.ticket_description}</p>
             </div>
           </div>
@@ -91,18 +146,28 @@ const TicketModal = ({ ticket, onClose }) => {
             </div>
 
             <div className="space-y-4 max-h-64 overflow-y-auto">
-              {comments.length === 0 ? (
-                <p className="text-gray-400 text-sm">No comments yet.</p>
-              ) : (
+              {Array.isArray(comments) && comments.length > 0 ? (
                 comments.map((comment) => (
                   <CommentItem
-                    key={comment.id}
+                    key={comment.comment_id || comment.id}
                     comment={comment}
                     addReply={handleAddReply}
                   />
                 ))
+              ) : (
+                <p className="text-gray-400 text-sm">No comments yet.</p>
               )}
             </div>
+          </div>
+
+          {/* OK button */}
+          <div className="flex justify-end mt-6">
+            <button
+              onClick={onClose}
+              className="bg-blue-600 text-white px-5 py-2 rounded-lg"
+            >
+              OK
+            </button>
           </div>
         </div>
       </div>
@@ -110,21 +175,25 @@ const TicketModal = ({ ticket, onClose }) => {
   );
 };
 
-// Nested Comment Item
+// Comment component
 const CommentItem = ({ comment, addReply }) => {
   const [replyMessage, setReplyMessage] = useState("");
   const [showReplyInput, setShowReplyInput] = useState(false);
 
   const handleReply = () => {
-    addReply(comment.id, replyMessage);
+    addReply(comment.comment_id || comment.id, replyMessage);
     setReplyMessage("");
     setShowReplyInput(false);
   };
 
   return (
     <div className="border-l-2 border-gray-200 pl-4">
-      <p className="text-sm font-medium text-gray-800">{comment.user}</p>
-      <p className="text-gray-700 text-sm mb-2">{comment.message}</p>
+      <p className="text-sm font-medium text-gray-800">
+        {comment.user_email || "Anonymous"}
+      </p>
+      <p className="text-gray-700 text-sm mb-2">
+        {comment.comment_text || comment.message}
+      </p>
 
       <button
         className="text-blue-600 text-xs mb-2"
@@ -151,17 +220,20 @@ const CommentItem = ({ comment, addReply }) => {
         </div>
       )}
 
-      {/* Nested Replies */}
-      {comment.replies && comment.replies.length > 0 && (
-        <div className="ml-4 space-y-2">
-          {comment.replies.map((reply) => (
-            <div key={reply.id} className="border-l-2 border-gray-300 pl-3">
-              <p className="text-sm font-medium text-gray-800">{reply.user}</p>
-              <p className="text-gray-700 text-sm">{reply.message}</p>
-            </div>
-          ))}
-        </div>
-      )}
+      {comment.replies &&
+        Array.isArray(comment.replies) &&
+        comment.replies.length > 0 && (
+          <div className="ml-4 space-y-2">
+            {comment.replies.map((reply) => (
+              <div key={reply.id} className="border-l-2 border-gray-300 pl-3">
+                <p className="text-sm font-medium text-gray-800">
+                  {reply.user_email || "Anonymous"}
+                </p>
+                <p className="text-gray-700 text-sm">{reply.message}</p>
+              </div>
+            ))}
+          </div>
+        )}
     </div>
   );
 };

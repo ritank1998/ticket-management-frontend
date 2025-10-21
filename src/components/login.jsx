@@ -2,28 +2,31 @@ import { useState } from "react";
 import Navbar from "./navbar";
 import Footer from "./footer";
 import { Link } from "react-router-dom";
+import GenericModal from "./genericStatusModal";
 
 const Login = () => {
   const [activeTab, setActiveTab] = useState("user"); // "user" | "admin"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [modalOpen, setModalOpen] = useState(false);
+  const [modalMessage, setModalMessage] = useState("");
 
   const submit = async (e) => {
     e.preventDefault();
 
     if (!email || !password) {
-      alert("Please enter both email and password.");
+      setModalMessage("Please enter both email and password.");
+      setModalOpen(true);
       return;
     }
 
     const payload = { email, password };
 
     try {
-      // Choose API endpoint based on active tab
       const endpoint =
         activeTab === "user"
           ? `${process.env.REACT_APP_URL}/signin`
-          : `${process.env.REACT_APP_URL}/admin_login`; // Admin API endpoint
+          : `${process.env.REACT_APP_URL}/admin_login`;
 
       const response = await fetch(endpoint, {
         method: "POST",
@@ -35,35 +38,40 @@ const Login = () => {
         const data = await response.json();
         const { token, user } = data;
 
-        // Store JWT token and optional user info
         sessionStorage.setItem("token", token);
         sessionStorage.setItem("user", JSON.stringify(user));
 
-        alert(
+        setModalMessage(
           activeTab === "admin"
             ? "Admin login successful!"
             : "Login successful!"
         );
-        if(activeTab === "admin")
-        {
- window.location.replace("/admin-portal");
-        }else{
-           window.location.replace("/home");
-        }
-       
+        setModalOpen(true);
+
+        // redirect after 1.5s delay or after modal close
+        setTimeout(() => {
+          if (activeTab === "admin") {
+            window.location.replace("/admin-portal");
+          } else {
+            window.location.replace("/home");
+          }
+        }, 1500);
       } else {
         const err = await response.json();
-        alert(err.error || "Invalid email or password.");
+        setModalMessage(err.error || "Invalid email or password.");
+        setModalOpen(true);
       }
     } catch (err) {
       console.error("Login error:", err.message);
-      alert("Something went wrong. Please try again later.");
+      setModalMessage("Something went wrong. Please try again later.");
+      setModalOpen(true);
     }
   };
 
   return (
     <>
       <Navbar />
+
       <div className="d-flex justify-content-center align-items-center vh-100 bg-light">
         <div
           className="card shadow-lg p-4"
@@ -136,7 +144,15 @@ const Login = () => {
           )}
         </div>
       </div>
+
       <Footer />
+
+      {/* ✅ Generic Modal */}
+      <GenericModal
+        isOpen={modalOpen}
+        message={modalMessage}
+        onClose={() => setModalOpen(false)}
+      />
     </>
   );
 };
