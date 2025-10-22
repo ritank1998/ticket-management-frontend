@@ -4,11 +4,12 @@ import Portal from "./portal";
 const TicketModal = ({ ticket, onClose }) => {
   const [comments, setComments] = useState([]);
   const [newComment, setNewComment] = useState("");
+  const [status, setStatus] = useState(ticket?.status || "");
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
-  // Get user from sessionStorage
   const user = JSON.parse(sessionStorage.getItem("user"));
 
-  // Fetch all comments when modal opens
+  // 🧠 Fetch Comments
   useEffect(() => {
     if (!ticket?.ticket_id) return;
 
@@ -19,14 +20,9 @@ const TicketModal = ({ ticket, onClose }) => {
         );
         const data = await res.json();
 
-        // Normalize data to always be an array
-        if (Array.isArray(data)) {
-          setComments(data);
-        } else if (data.comment) {
-          setComments([data.comment]);
-        } else {
-          setComments([]);
-        }
+        if (Array.isArray(data)) setComments(data);
+        else if (data.comment) setComments([data.comment]);
+        else setComments([]);
       } catch (error) {
         console.error("Error fetching comments:", error);
         setComments([]);
@@ -36,7 +32,7 @@ const TicketModal = ({ ticket, onClose }) => {
     fetchComments();
   }, [ticket]);
 
-  // Add new comment (POST)
+  // 💬 Add Comment
   const handleAddComment = async () => {
     if (!newComment.trim()) return;
     if (!ticket?.ticket_id || !user?.user_id) return;
@@ -53,20 +49,51 @@ const TicketModal = ({ ticket, onClose }) => {
       });
 
       const data = await res.json();
-
       if (res.ok) {
-        // Backend returns { comment: {...} }, normalize to array
         setComments((prev) => [data.comment, ...prev]);
         setNewComment("");
       } else {
-        console.error("Failed to add comment:", data);
+        alert("Failed to add comment");
       }
     } catch (error) {
       console.error("Error adding comment:", error);
     }
   };
 
-  // Add reply locally (not persisted yet)
+  // 🆙 Update Ticket Status
+  const handleStatusChange = async (e) => {
+    const newStatus = e.target.value;
+    setStatus(newStatus);
+
+    if (!newStatus || !ticket?.ticket_id || !user?.user_id) return;
+
+    setIsUpdatingStatus(true);
+    try {
+      const res = await fetch(`${process.env.REACT_APP_URL}/update-status`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ticket_id: ticket.ticket_id,
+          new_status: newStatus,
+          changed_by: user.user_id,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        alert(`✅ Ticket status updated to "${newStatus}"`);
+      } else {
+        alert(`❌ Failed to update status: ${data.error}`);
+      }
+    } catch (error) {
+      console.error("Error updating ticket status:", error);
+      alert("Server error while updating status");
+    } finally {
+      setIsUpdatingStatus(false);
+    }
+  };
+
+  // 🧩 Add reply (local only)
   const handleAddReply = (commentId, replyMessage) => {
     if (!replyMessage.trim()) return;
     setComments((prev) =>
@@ -90,14 +117,14 @@ const TicketModal = ({ ticket, onClose }) => {
   return (
     <Portal>
       <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 overflow-auto p-4"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
         onClick={onClose}
       >
         <div
-          className="bg-white rounded-2xl shadow-lg max-w-lg w-full p-6 relative"
+          className="bg-white rounded-2xl shadow-lg w-full max-w-lg sm:max-h-[90vh] overflow-y-auto p-6 relative"
           onClick={(e) => e.stopPropagation()}
         >
-          {/* Close Button */}
+          {/* ❌ Close Button */}
           <button
             onClick={onClose}
             className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl font-bold"
@@ -105,47 +132,68 @@ const TicketModal = ({ ticket, onClose }) => {
             &times;
           </button>
 
-          {/* Ticket Details */}
-          <h2 className="text-2xl font-bold mb-4">Ticket Details</h2>
+          {/* 🧾 Ticket Details */}
+          <h2 className="text-2xl font-bold mb-4 text-center sm:text-left">
+            Ticket Details
+          </h2>
+
           <div className="space-y-3 text-gray-700">
             <div>
               <h6 className="text-gray-400 uppercase text-xs mb-1">Project</h6>
               <p>{ticket.project_name || "Not Assigned"}</p>
             </div>
-            <div>
-              <h6 className="text-gray-400 uppercase text-xs mb-1">Status</h6>
-              <p>{ticket.status}</p>
+
+            {/* ✅ Status Dropdown */}
+            <div className="mb-4">
+              <label className="block text-sm font-semibold mb-1">Status</label>
+              <select
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:ring focus:ring-blue-300"
+                value={status}
+                onChange={handleStatusChange}
+                disabled={isUpdatingStatus}
+              >
+                <option value="">Select Status</option>
+                <option value="High">High</option>
+                <option value="Medium">Medium</option>
+                <option value="Low">Low</option>
+                <option value="Resolved">Resolved</option>
+                <option value="In Progress">In Progress</option>
+              </select>
             </div>
+
             <div>
               <h6 className="text-gray-400 uppercase text-xs mb-1">
                 Description
               </h6>
-              <p>{ticket.ticket_description}</p>
+              <p className="break-words">{ticket.ticket_description}</p>
             </div>
           </div>
 
-          {/* Comments Section */}
+          {/* 💬 Comments Section */}
           <div className="mt-6">
-            <h3 className="text-lg font-bold mb-3 border-b pb-1">Comments</h3>
+            <h3 className="text-lg font-bold mb-3 border-b pb-1">
+              Comments
+            </h3>
 
-            {/* New Comment Input */}
-            <div className="mb-4 flex gap-2">
+            {/* Responsive Add Comment Input */}
+            <div className="mb-4 flex flex-col sm:flex-row sm:items-center gap-2 w-full">
               <input
                 type="text"
                 placeholder="Add a comment..."
-                className="flex-1 border rounded-lg px-3 py-2 text-sm"
+                className="flex-1 border rounded-lg px-3 py-2 text-sm w-full sm:w-auto"
                 value={newComment}
                 onChange={(e) => setNewComment(e.target.value)}
               />
               <button
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm"
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm w-full sm:w-auto"
                 onClick={handleAddComment}
               >
                 Add
               </button>
             </div>
 
-            <div className="space-y-4 max-h-64 overflow-y-auto">
+            {/* Comments List */}
+            <div className="space-y-4 max-h-64 overflow-y-auto pr-2">
               {Array.isArray(comments) && comments.length > 0 ? (
                 comments.map((comment) => (
                   <CommentItem
@@ -160,11 +208,11 @@ const TicketModal = ({ ticket, onClose }) => {
             </div>
           </div>
 
-          {/* OK button */}
+          {/* OK Button */}
           <div className="flex justify-end mt-6">
             <button
               onClick={onClose}
-              className="bg-blue-600 text-white px-5 py-2 rounded-lg"
+              className="bg-blue-600 text-white px-5 py-2 rounded-lg w-full sm:w-auto"
             >
               OK
             </button>
@@ -175,7 +223,7 @@ const TicketModal = ({ ticket, onClose }) => {
   );
 };
 
-// Comment component
+// 🧱 Comment Component
 const CommentItem = ({ comment, addReply }) => {
   const [replyMessage, setReplyMessage] = useState("");
   const [showReplyInput, setShowReplyInput] = useState(false);
@@ -191,7 +239,7 @@ const CommentItem = ({ comment, addReply }) => {
       <p className="text-sm font-medium text-gray-800">
         {comment.user_email || "Anonymous"}
       </p>
-      <p className="text-gray-700 text-sm mb-2">
+      <p className="text-gray-700 text-sm mb-2 break-words">
         {comment.comment_text || comment.message}
       </p>
 
@@ -203,7 +251,7 @@ const CommentItem = ({ comment, addReply }) => {
       </button>
 
       {showReplyInput && (
-        <div className="flex gap-2 mb-2">
+        <div className="flex flex-col sm:flex-row gap-2 mb-2">
           <input
             type="text"
             placeholder="Write a reply..."
@@ -220,20 +268,20 @@ const CommentItem = ({ comment, addReply }) => {
         </div>
       )}
 
-      {comment.replies &&
-        Array.isArray(comment.replies) &&
-        comment.replies.length > 0 && (
-          <div className="ml-4 space-y-2">
-            {comment.replies.map((reply) => (
-              <div key={reply.id} className="border-l-2 border-gray-300 pl-3">
-                <p className="text-sm font-medium text-gray-800">
-                  {reply.user_email || "Anonymous"}
-                </p>
-                <p className="text-gray-700 text-sm">{reply.message}</p>
-              </div>
-            ))}
-          </div>
-        )}
+      {comment.replies?.length > 0 && (
+        <div className="ml-4 space-y-2">
+          {comment.replies.map((reply) => (
+            <div key={reply.id} className="border-l-2 border-gray-300 pl-3">
+              <p className="text-sm font-medium text-gray-800">
+                {reply.user_email || "Anonymous"}
+              </p>
+              <p className="text-gray-700 text-sm break-words">
+                {reply.message}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
