@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import Navbar from "./navbar";
 import Footer from "./footer";
 import { useNavigate } from "react-router-dom";
+import Breadcrumb from "./breadCrumb";
 
 const Admin_Portal = () => {
   const [projectName, setProjectName] = useState("");
@@ -128,9 +129,9 @@ const Admin_Portal = () => {
 
   return (
     <div className="d-flex flex-column min-vh-100">
-      {/* ✅ Navbar without extra styles */}
-      <Navbar onLogout={handleLogout} />
 
+      <Navbar onLogout={handleLogout} />
+ <Breadcrumb prevPageName="Home" prevPageLink="/home" />
       <div className="flex-grow-1 container py-4">
         <h2 className="text-center mb-4 fw-bold">Admin Portal</h2>
 
